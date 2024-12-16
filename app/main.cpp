@@ -4,7 +4,7 @@
 #include "databaseApp.h"
 
 int main() {
-    std::string host = "127.0.0.1";
+    std::string host = "172.19.76.58";
     std::string user, pass, database = "my_database";
 
     // Input username and password

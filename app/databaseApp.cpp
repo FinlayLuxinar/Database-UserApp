@@ -164,7 +164,7 @@ void DatabaseApp::updateDatabaseSetting(const std::string& settingName, int valu
     MYSQL* conn = mysql_init(nullptr);
 
     // Connection parameters for the admin user
-    const char* host = "127.0.0.1";
+    const char* host = "172.19.76.58";
     const char* admin_user = "my_user";  // Separate admin username
     const char* admin_pass = "my_password";  // Secure admin password
     const char* database = "my_database";
