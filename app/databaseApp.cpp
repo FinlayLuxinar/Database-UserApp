@@ -3,17 +3,44 @@
 #include <stdexcept>
 #include <mariadb/mysql.h>
 #include <limits>
+#include <sstream>
 
 DatabaseApp::DatabaseApp(DatabaseConnector* dbConnector)
-    : dbConnector(dbConnector), storageThreshold(80), dataRemovalAmount(30) {}
+    : dbConnector(dbConnector), 
+      dataHandler(new DataHandler(dbConnector)), // Initialize DataHandler
+      storageThreshold(80), 
+      dataRemovalAmount(30) {}
+
+
+
+void DatabaseApp::displayMenu() {
+    std::cout << "\n===== Database Application Menu =====\n";
+    std::cout << "1. Run Query\n";
+    std::cout << "2. Configure Program\n";
+    std::cout << "3. Mathmatical Operations\n";
+    std::cout << "4. Exit\n";
+    std::cout << "Please select an option: ";
+}
 
 void DatabaseApp::run() {
     int choice;
     do {
+        // Clear any previous error flags and input buffer
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
         displayMenu();
-        std::cin >> choice;
+        
+        // Robust input handling
+        if (!(std::cin >> choice)) {
+            std::cout << "Invalid input. Please enter a number." << std::endl;
+            continue;
+        }
 
         switch (choice) {
+            case 0:
+                std::cout << "Returning to previous menu..." << std::endl;
+                break;
             case 1:
                 runQueryMenu();
                 break;
@@ -21,21 +48,26 @@ void DatabaseApp::run() {
                 configureProgram();
                 break;
             case 3:
+                analyseData();
+                break;
+            case 4:
                 std::cout << "Exiting the program..." << std::endl;
                 break;
             default:
-                std::cout << "Invalid choice, please try again." << std::endl;
+                std::cout << "Invalid choice. Please select a valid option (0-4)." << std::endl;
         }
-    } while (choice != 3);
+    } while (choice != 4);
 }
 
-void DatabaseApp::displayMenu() {
-    std::cout << "\nMenu Options:\n";
-    std::cout << "1. Run Query\n";
-    std::cout << "2. Configure Program\n";
-    std::cout << "3. Exit\n";
-    std::cout << "Please select an option: ";
+void DatabaseApp::analyseData() {
+    if (dataHandler) {
+        dataHandler->analyzeField();
+    } else {
+        std::cerr << "Data handler not initialized." << std::endl;
+    }
 }
+
+
 
 void DatabaseApp::runQueryMenu() {
     std::string query;
@@ -96,36 +128,86 @@ void DatabaseApp::executeQuery(const std::string& query) {
 
 void DatabaseApp::configureProgram() {
     // Fetch the current values of the settings from the database
-    int currentStorageThreshold = fetchDatabaseSetting("maxStorage");
-    int currentDataRemovalAmount = fetchDatabaseSetting("monthsToRemove");
+    int currentStorageThreshold;
+    int currentDataRemovalAmount;
 
-    // Validate fetched values; if invalid, provide default messages
-    if (currentStorageThreshold == -1) {
-        std::cerr << "Error fetching current storage threshold from the database. Defaulting to 80%." << std::endl;
-        currentStorageThreshold = 80;
-    }
-    if (currentDataRemovalAmount == -1) {
-        std::cerr << "Error fetching current data removal amount from the database. Defaulting to 3 months." << std::endl;
+    try {
+        currentStorageThreshold = fetchDatabaseSetting("maxStorage");
+        currentDataRemovalAmount = fetchDatabaseSetting("monthsToRemove");
+    } catch (const std::exception& e) {
+        std::cerr << "Error fetching database settings: " << e.what() << std::endl;
+        currentStorageThreshold = 80;  // Default values
         currentDataRemovalAmount = 3;
     }
 
-    int configChoice;
-    std::cout << "\nConfigure Program Options:\n";
-    std::cout << "1. Alter Storage Threshold (currently " << currentStorageThreshold << "%)\n";
-    std::cout << "2. Alter Data Removal Amount (currently " << currentDataRemovalAmount << " months)\n";
-    std::cout << "Please select an option: ";
-    std::cin >> configChoice;
+    while (true) {
+        std::cout << "\n===== Program Configuration =====\n";
+        std::cout << "Current Settings:\n";
+        std::cout << "1. Storage Threshold: " << currentStorageThreshold << "%\n";
+        std::cout << "2. Data Removal Amount: " << currentDataRemovalAmount << " days\n";
+        std::cout << "3. Cancel/Return to Previous Menu\n";
+        std::cout << "Please select an option: ";
 
-    switch (configChoice) {
-        case 1:
-            setStorageThreshold();
-            break;
-        case 2:
-            setDataRemovalAmount();
-            break;
-        default:
-            std::cout << "Invalid option, returning to the main menu." << std::endl;
-            break;
+        int configChoice;
+        
+        // Clear any previous error flags and input buffer
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+        // Robust input handling
+        if (!(std::cin >> configChoice)) {
+            std::cout << "Invalid input. Please enter a number." << std::endl;
+            continue;
+        }
+
+        switch (configChoice) {
+            case 0:
+                std::cout << "Configuration cancelled." << std::endl;
+                return;
+            case 1:
+                try {
+                    setStorageThreshold();
+                } catch (const std::exception& e) {
+                    std::cerr << "Error setting storage threshold: " << e.what() << std::endl;
+                }
+                break;
+            case 2:
+                try {
+                    setDataRemovalAmount();
+                } catch (const std::exception& e) {
+                    std::cerr << "Error setting data removal amount: " << e.what() << std::endl;
+                }
+                break;
+            case 3:
+                return;
+            default:
+                std::cout << "Invalid option. Please select a valid option (0-3)." << std::endl;
+        }
+    }
+}
+
+int DatabaseApp::getValidatedIntInput(const std::string& prompt, int minValue, int maxValue) {
+    int input;
+    while (true) {
+        std::cout << prompt;
+        
+        // Clear any previous error flags and input buffer
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+        // Robust input handling
+        if (!(std::cin >> input)) {
+            std::cout << "Invalid input. Please enter a number." << std::endl;
+            continue;
+        }
+
+        // Check if input is within valid range
+        if (input >= minValue && input <= maxValue) {
+            return input;
+        }
+
+        std::cout << "Input out of range. Please enter a value between " 
+                  << minValue << " and " << maxValue << "." << std::endl;
     }
 }
 
@@ -236,8 +318,8 @@ void DatabaseApp::setDataRemovalAmount() {
 
     int newDataRemovalAmount;
     while (true) {
-        std::cout << "\nEnter new data removal amount in months (current: " 
-                  << currentDataRemovalAmount << " months): ";
+        std::cout << "\nEnter new data removal amount in days (current: " 
+                  << currentDataRemovalAmount << " days): ";
         
         // Input validation to prevent input failure
         if (!(std::cin >> newDataRemovalAmount)) {
@@ -256,4 +338,8 @@ void DatabaseApp::setDataRemovalAmount() {
         updateDatabaseSetting("monthsToRemove", newDataRemovalAmount);
         break;
     }
+}
+
+DatabaseApp::~DatabaseApp() {
+    delete dataHandler;
 }
